@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redshift vs Gravity</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;900&display=swap');
+
+body {
+background-color: #000;
+color: #fff;
+font-family: 'Orbitron', sans-serif;
+margin: 0;
+overflow: hidden;
+height: 100vh;
+touch-action: none;
+}
+
+#game-canvas {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+}
+
+.photon {
+position: absolute;
+border-radius: 50%;
+pointer-events: none;
+z-index: 50;
+transition: background-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.spaghettification {
+transition: all 0.8s ease-in !important;
+height: 600px !important;
+width: 1px !important;
+transform: translate(-50%, 0%) !important;
+background-color: white !important;
+box-shadow: 0 0 20px white !important;
+}
+
+.hud-panel {
+background: rgba(0, 0, 0, 0.85);
+border: 1px solid rgba(255, 255, 255, 0.2);
+backdrop-filter: blur(10px);
+}
+
+.btn-push {
+background: linear-gradient(135deg, #444, #111);
+border: 2px solid #fff;
+transition: all 0.1s;
+box-shadow: 0 0 15px rgba(255,255,255,0.2);
+cursor: pointer;
+outline: none;
+user-select: none;
+}
+
+.btn-push:active {
+transform: scale(0.90);
+background: #fff;
+color: #000;
+}
+
+.pulse-red {
+animation: pulse-red 0.6s infinite alternate;
+}
+
+@keyframes pulse-red {
+0% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); transform: translate(-50%, 0) scale(1); }
+100% { box-shadow: 0 0 50px rgba(239, 68, 68, 1); transform: translate(-50%, 0) scale(1.3); }
+}
+
+.btn-action {
+cursor: pointer;
+z-index: 300;
+transition: all 0.2s;
+border: 2px solid white;
+padding: 1rem 2.5rem;
+font-weight: 900;
+text-transform: uppercase;
+background: black;
+color: white;
+}
+
+.btn-action:hover {
+background-color: white;
+color: black;
+}
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="game-canvas">
+<!-- Buco Nero -->
+<div id="black-hole" class="absolute left-1/2 bottom-[-180px] -translate-x-1/2 w-[550px] h-[550px] bg-black rounded-full shadow-[0_0_150px_rgba(255,255,255,0.1)] border border-white/10 z-10">
+<div class="absolute inset-0 rounded-full animate-pulse opacity-10 border-[40px] border-white"></div>
+</div>
+
+<!-- Fotone -->
+<div id="photon" class="photon w-8 h-8 bg-blue-400 shadow-[0_0_20px_#60a5fa] left-1/2 top-3/4 -translate-x-1/2"></div>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="fixed inset-x-0 top-0 p-6 flex justify-between z-[100] opacity-0 transition-opacity duration-500">
+<div class="hud-panel p-4 w-64">
+<div class="text-[10px] text-gray-400 uppercase tracking-widest mb-1 font-bold">Stato Energetico</div>
+<div id="spectral-label" class="text-blue-400 font-black text-xl">GAMMA</div>
+<div class="w-full h-1.5 bg-gray-900 mt-2 rounded-full overflow-hidden">
+<div id="energy-bar" class="h-full bg-blue-400 transition-all duration-300" style="width: 100%"></div>
+</div>
+</div>
+<div class="hud-panel p-4 w-64 text-right">
+<div class="text-[10px] text-gray-400 uppercase tracking-widest mb-1 font-bold">Tempo Terrestre</div>
+<div id="time-label" class="text-white font-black text-xl">0 ANNI</div>
+</div>
+</div>
+
+<!-- Controlli -->
+<div id="controls" class="fixed inset-x-0 bottom-12 flex flex-col items-center gap-4 z-[100] opacity-0 transition-opacity duration-500">
+<div id="tutorial-msg" class="text-[10px] text-center max-w-xs bg-black/80 border border-white/10 p-2 rounded uppercase tracking-widest font-bold">
+TIENI PREMUTO PER CONTRASTARE LA GRAVITÀ
+</div>
+<button id="push-btn" class="btn-push w-24 h-24 rounded-full font-black text-xs uppercase flex items-center justify-center">
+SPINTA
+</button>
+</div>
+
+<!-- Overlay Schermate -->
+<div id="screen-overlay" class="fixed inset-0 bg-black flex items-center justify-center z-[200]">
+<!-- Menu Iniziale -->
+<div id="menu-start" class="text-center p-8 max-w-lg">
+<h1 class="text-6xl font-black italic tracking-tighter mb-4 text-white">REDSHIFT</h1>
+<p class="text-gray-400 text-sm mb-12 leading-relaxed uppercase tracking-widest">
+La gravità ruba l'energia alla luce.<br>Diventa rosso per scappare.
+</p>
+<button onclick="startGame()" class="btn-action">Inizia il Viaggio</button>
+</div>
+
+<!-- Menu Fine -->
+<div id="menu-end" class="text-center p-8 max-w-xl hidden">
+<div id="end-content"></div>
+<button onclick="resetGame()" class="btn-action mt-8">Ricomincia</button>
+</div>
+</div>
+
+<script>
+const INITIAL_STATE = {
+energy: 100,
+yPos: 75,
+time: 0,
+isPushing: false,
+active: false,
+gameOver: false
+};
+
+let state = { ...INITIAL_STATE };
+let animationFrame;
+
+// Elementi DOM
+let photon, energyBar, spectralLabel, timeLabel, overlay, menuStart, menuEnd, endContent, pushBtn, hud, controls;
+
+window.onload = function() {
+photon = document.getElementById('photon');
+energyBar = document.getElementById('energy-bar');
+spectralLabel = document.getElementById('spectral-label');
+timeLabel = document.getElementById('time-label');
+overlay = document.getElementById('screen-overlay');
+menuStart = document.getElementById('menu-start');
+menuEnd = document.getElementById('menu-end');
+endContent = document.getElementById('end-content');
+pushBtn = document.getElementById('push-btn');
+hud = document.getElementById('hud');
+controls = document.getElementById('controls');
+
+// Eventi Input
+const startPush = (e) => { e.preventDefault(); if(state.active && !state.gameOver) state.isPushing = true; };
+const stopPush = () => state.isPushing = false;
+
+pushBtn.addEventListener('mousedown', startPush);
+window.addEventListener('mouseup', stopPush);
+pushBtn.addEventListener('touchstart', startPush, {passive: false});
+window.addEventListener('touchend', stopPush);
+};
+
+function startGame() {
+overlay.classList.add('pointer-events-none');
+overlay.style.backgroundColor = 'transparent';
+menuStart.classList.add('hidden');
+hud.style.opacity = '1';
+controls.style.opacity = '1';
+state.active = true;
+gameLoop();
+}
+
+function resetGame() {
+cancelAnimationFrame(animationFrame);
+
+// Ripristina Stato
+state = { ...INITIAL_STATE };
+state.active = true;
+state.gameOver = false;
+
+// Ripristina UI
+photon.className = "photon w-8 h-8 bg-blue-400 shadow-[0_0_20px_#60a5fa] left-1/2 -translate-x-1/2";
+photon.style.top = '75%';
+energyBar.style.width = '100%';
+energyBar.style.backgroundColor = '#60a5fa';
+spectralLabel.innerText = "GAMMA";
+spectralLabel.className = "text-blue-400 font-black text-xl";
+timeLabel.innerText = "0 ANNI";
+
+// Correzione Bug Oscuramento: rimuoviamo lo sfondo nero dell'overlay
+menuEnd.classList.add('hidden');
+overlay.classList.add('pointer-events-none');
+overlay.style.backgroundColor = 'transparent';
+
+gameLoop();
+}
+
+function update() {
+if (!state.active || state.gameOver) return;
+
+if (state.isPushing && state.energy > 0.1) {
+state.yPos -= 0.28;
+// CONSUMO ENERGETICO: Molto più alto per garantire il Redshift prima della fine
+state.energy -= 0.28;
+state.time += (95 - state.yPos) * 25;
+} else {
+let gravity = 0.15 + ((80 - state.yPos) * 0.025);
+state.yPos += Math.max(0.1, gravity);
+}
+
+// Check Sconfitta (Troppo in basso)
+if (state.yPos > 95) {
+endGame('CATTURATO', 'La gravità ti ha schiacciato. Sei diventato parte della massa silenziosa del buco nero.');
+}
+
+// Check Vittoria (Uscito dalla zona critica)
+// Portato a 5% per dare tempo all'energia di scendere al rosso
+if (state.yPos < 5) {
+endGame('LIBERATO', `Sei scappato dalla morsa gravitazionale. Come previsto dalla relatività, hai perso quasi tutta la tua energia diventando luce ROSSA. Sulla Terra sono passati ${Math.floor(state.time).toLocaleString()} anni.`);
+}
+}
+
+function render() {
+if (state.gameOver) return;
+
+photon.style.top = state.yPos + '%';
+energyBar.style.width = Math.max(0, state.energy) + '%';
+timeLabel.innerText = Math.floor(state.time).toLocaleString() + " ANNI";
+
+// LOGICA COLORI (FOCUS SUL ROSSO)
+if (state.energy > 80) {
+updatePhotonStyle("GAMMA", "text-blue-400", "#60a5fa");
+} else if (state.energy > 60) {
+updatePhotonStyle("ULTRAVIOLETTO", "text-purple-400", "#a855f7");
+} else if (state.energy > 40) {
+updatePhotonStyle("VISIBILE (GIALLO)", "text-yellow-400", "#facc15");
+} else if (state.energy > 10) {
+// Questa fase durerà molto di più ora
+updatePhotonStyle("VISIBILE (ROSSO)", "text-red-500 pulse-red", "#ef4444");
+} else {
+updatePhotonStyle("RADIO / INFRAROSSO", "text-red-900 pulse-red", "#7f1d1d");
+}
+}
+
+function updatePhotonStyle(label, labelClass, color) {
+spectralLabel.innerText = label;
+spectralLabel.className = labelClass + " font-black text-xl transition-colors duration-500";
+photon.style.backgroundColor = color;
+photon.style.boxShadow = `0 0 30px ${color}`;
+energyBar.style.backgroundColor = color;
+}
+
+function endGame(title, message) {
+state.active = false;
+state.gameOver = true;
+state.isPushing = false;
+
+if (title === 'CATTURATO') {
+photon.classList.add('spaghettification');
+}
+
+setTimeout(() => {
+overlay.classList.remove('pointer-events-none');
+overlay.style.backgroundColor = 'rgba(0,0,0,0.95)';
+menuEnd.classList.remove('hidden');
+
+endContent.innerHTML = `
+<h2 class="text-7xl font-black ${title === 'LIBERATO' ? 'text-red-600' : 'text-white'} italic mb-6 tracking-tighter">${title}</h2>
+<p class="text-gray-300 leading-relaxed text-lg max-w-md mx-auto">
+${message}
+</p>
+`;
+}, 1000);
+}
+
+function gameLoop() {
+update();
+render();
+if (state.active) {
+animationFrame = requestAnimationFrame(gameLoop);
+}
+}
+</script>
+</body>
+</html>
